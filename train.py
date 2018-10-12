@@ -9,7 +9,8 @@ from model import CycleGAN
 
 
 def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validation_A_dir, validation_B_dir, output_dir, tensorboard_log_dir):
-
+    # calculate data-wide statistics (mean and std of MCEPs & logF0)
+    #
     np.random.seed(random_seed)
 
     num_epochs = 5000
@@ -29,11 +30,20 @@ def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validati
 
     start_time = time.time()
 
+    # single contents:
+    # fileSystem -> np.ndarray(1, T)
     wavs_A = load_wavs(wav_dir = train_A_dir, sr = sampling_rate)
     wavs_B = load_wavs(wav_dir = train_B_dir, sr = sampling_rate)
+    print("wavs_A:")
+    print(wavs_A[0].shape) # (1, 56314)
 
+    # single contents:
+    # single contents: np.ndarray(1, T) -> np.ndarray(?, ?) coded_spectral_envelope
+    # I suspect from .shape, np.ndarray(T/frame_period, 24(MCEPs))
     f0s_A, timeaxes_A, sps_A, aps_A, coded_sps_A = world_encode_data(wavs = wavs_A, fs = sampling_rate, frame_period = frame_period, coded_dim = num_mcep)
     f0s_B, timeaxes_B, sps_B, aps_B, coded_sps_B = world_encode_data(wavs = wavs_B, fs = sampling_rate, frame_period = frame_period, coded_dim = num_mcep)
+    print("coded_sps_A:")
+    print(coded_sps_A[0].shape) # (704, 24)
 
     log_f0s_mean_A, log_f0s_std_A = logf0_statistics(f0s_A)
     log_f0s_mean_B, log_f0s_std_B = logf0_statistics(f0s_B)
@@ -44,9 +54,17 @@ def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validati
     print('Mean: %f, Std: %f' %(log_f0s_mean_B, log_f0s_std_B))
 
 
+    # single contents:
+    # np.ndarray(?, ?) coded_spectral_envelope -> np.ndarray(?, ?)
+    # I suspect from .shape, np.ndarray(T/frame_period, 24(MCEPs)) -> np.ndarray(24(MCEPs), T/frame_period)
     coded_sps_A_transposed = transpose_in_list(lst = coded_sps_A)
     coded_sps_B_transposed = transpose_in_list(lst = coded_sps_B)
+    print("coded_sps_A_transposed:")
+    print(coded_sps_A_transposed[0].shape) # (24, 704)
 
+    #coded_sps_A_norm is used to train data
+    # single conents:
+    # I suspect, np.ndarray(24(MCEPs), T/frame_period) ->
     coded_sps_A_norm, coded_sps_A_mean, coded_sps_A_std = coded_sps_normalization_fit_transoform(coded_sps = coded_sps_A_transposed)
     print("Input data fixed.")
     coded_sps_B_norm, coded_sps_B_mean, coded_sps_B_std = coded_sps_normalization_fit_transoform(coded_sps = coded_sps_B_transposed)

@@ -12,13 +12,22 @@ def load_wavs(wav_dir, sr):
         #wav = wav.astype(np.float64)
         wavs.append(wav)
 
-    return wavs
+    return wavs  # [[1,2,5,2,3,5,....(raw_audio)], [wav2], ...] (each raw_audio is np.ndarray)
 
+# single contents:
+# np.ndarray(1, T) -> np.ndarray(?, ?) , spectrogram (timelapse of spectral envelopes)
 def world_decompose(wav, fs, frame_period = 5.0):
 
     # Decompose speech signal into f0, spectral envelope and aperiodicity using WORLD
-    wav = wav.astype(np.float64)
+    wav = wav.astype(np.float64) # np.ndarray -> np.ndarray(number is float64)
     f0, timeaxis = pyworld.harvest(wav, fs, frame_period = frame_period, f0_floor = 71.0, f0_ceil = 800.0)
+    # np.ndarray(1, T) -> np.ndarray(?, ?) , spectrogram (timelapse of spectral envelopes, spuared magnitude)
+    # I suspect np.ndarray(?, ?) is np.ndarray(frequency, frame)
+    # https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder/blob/master/pyworld/pyworld.pyx#L299
+    # wav: ndarray
+    # f0: ndarray
+    # timeaxis: ndarray - temporal_positions of each frame
+    # fs: int - samling rate [Hz]
     sp = pyworld.cheaptrick(wav, f0, timeaxis, fs)
     ap = pyworld.d4c(wav, f0, timeaxis, fs)
 
@@ -29,9 +38,9 @@ def world_encode_spectral_envelop(sp, fs, dim = 24):
     # Get Mel-cepstral coefficients (MCEPs)
 
     #sp = sp.astype(np.float64)
-    coded_sp = pyworld.code_spectral_envelope(sp, fs, dim)
+    coded_sp = pyworld.code_spectral_envelope(sp, fs, dim)  # return - coded_spectral_envelope : ndarray, Coded spectral envelope.
 
-    return coded_sp
+    return coded_sp # ndarray
 
 def world_decode_spectral_envelop(coded_sp, fs):
 
@@ -42,7 +51,8 @@ def world_decode_spectral_envelop(coded_sp, fs):
 
     return decoded_sp
 
-
+# transform wavs into acoustic_features
+# single contents: np.ndarray(1, T) -> np.ndarray(?, ?) coded_spectral_envelope
 def world_encode_data(wavs, fs, frame_period = 5.0, coded_dim = 24):
 
     f0s = list()
@@ -52,7 +62,10 @@ def world_encode_data(wavs, fs, frame_period = 5.0, coded_dim = 24):
     coded_sps = list()
 
     for wav in wavs:
+        # np.ndarray(1, T) -> np.ndarray(?, ?) I suspect np.ndarray(frequency, frame) , spectrogram (timelapse of spectral envelopes)
         f0, timeaxis, sp, ap = world_decompose(wav = wav, fs = fs, frame_period = frame_period)
+        # np.ndarray(?, ?) spectrogram -> np.ndarray(?, ?) coded_spectral_envelope (MCEPs)
+        # I suspect, np.ndarray(frequency, frame) spectrogram -> np.ndarray(24(MCEPs), T/frame_period) coded_spectral_envelope (MCEPs)
         coded_sp = world_encode_spectral_envelop(sp = sp, fs = fs, dim = coded_dim)
         f0s.append(f0)
         timeaxes.append(timeaxis)
@@ -62,12 +75,13 @@ def world_encode_data(wavs, fs, frame_period = 5.0, coded_dim = 24):
 
     return f0s, timeaxes, sps, aps, coded_sps
 
-
+# lst: Python list : [data1, data2, data3, data4, ...]
 def transpose_in_list(lst):
 
     transposed_lst = list()
-    for array in lst:
+    for array in lst:# array == single data (from wav)
         transposed_lst.append(array.T)
+                # https://docs.scipy.org/doc/numpy-1.5.x/reference/generated/numpy.ndarray.T.html#numpy.ndarray.T
     return transposed_lst
 
 
@@ -102,17 +116,36 @@ def world_synthesis_data(f0s, decoded_sps, aps, fs, frame_period):
 
     return wavs
 
-
+# single contents:
+# np.ndarray(?, ?) ->
+# I suspect from .shape, np.ndarray(24(MCEPs), T/frame_period) ->
 def coded_sps_normalization_fit_transoform(coded_sps):
-
+    # calculation trick for mean and std (cancate then calculate)
+    # I suspect from .shape,
+    # np.ndarray(24(MCEPs), T/frame_period).concat
+    #        wav1_t0, t1, t2, ......., wav2_t1, ....
+    # MCEP0
+    # MCEP1
+    # MCEP2
+    # MCEP3
+    # MCEP4
+    # ...
     coded_sps_concatenated = np.concatenate(coded_sps, axis = 1)
+    print("coded_sps_concatenated:")
+    print(coded_sps_concatenated.shape) # (24, 112398)
     coded_sps_mean = np.mean(coded_sps_concatenated, axis = 1, keepdims = True)
     coded_sps_std = np.std(coded_sps_concatenated, axis = 1, keepdims = True)
-
+    print("coded_sps_mean:")
+    print(coded_sps_mean)
+    print(coded_sps_mean.shape) # (24, 1)
+    print("coded_sps_std:")
+    print(coded_sps_std)
+    # normalization is applied per dimension (from article)
     coded_sps_normalized = list()
     for coded_sp in coded_sps:
+        # normalize each MCEP_timeseries sample with coded_sps_mean
         coded_sps_normalized.append((coded_sp - coded_sps_mean) / coded_sps_std)
-    
+
     return coded_sps_normalized, coded_sps_mean, coded_sps_std
 
 def coded_sps_normalization_transoform(coded_sps, coded_sps_mean, coded_sps_std):
@@ -120,7 +153,7 @@ def coded_sps_normalization_transoform(coded_sps, coded_sps_mean, coded_sps_std)
     coded_sps_normalized = list()
     for coded_sp in coded_sps:
         coded_sps_normalized.append((coded_sp - coded_sps_mean) / coded_sps_std)
-    
+
     return coded_sps_normalized
 
 def coded_sps_normalization_inverse_transoform(normalized_coded_sps, coded_sps_mean, coded_sps_std):
@@ -145,8 +178,9 @@ def coded_sp_padding(coded_sp, multiple = 4):
 
 def wav_padding(wav, sr, frame_period, multiple = 4):
 
-    assert wav.ndim == 1 
+    assert wav.ndim == 1
     num_frames = len(wav)
+        #                                 (        N_wav_frame / (sr*5 msec)               + 1)
     num_frames_padded = int((np.ceil((np.floor(num_frames / (sr * frame_period / 1000)) + 1) / multiple + 1) * multiple - 1) * (sr * frame_period / 1000))
     num_frames_diff = num_frames_padded - num_frames
     num_pad_left = num_frames_diff // 2
@@ -200,12 +234,13 @@ def mfccs_normalization(mfccs):
     mfccs_normalized = list()
     for mfcc in mfccs:
         mfccs_normalized.append((mfcc - mfccs_mean) / mfccs_std)
-    
+
     return mfccs_normalized, mfccs_mean, mfccs_std
 
-
+# used only in "train.py"
 def sample_train_data(dataset_A, dataset_B, n_frames = 128):
-
+    # dataset_X : coded_sps_A_norm (list of normalzied MCEPs from all wav train data)
+    # make order-randamized index array (array length == min(len(dataset_A), len(dataset_B)))
     num_samples = min(len(dataset_A), len(dataset_B))
     train_data_A_idx = np.arange(len(dataset_A))
     train_data_B_idx = np.arange(len(dataset_B))
@@ -218,11 +253,13 @@ def sample_train_data(dataset_A, dataset_B, n_frames = 128):
     train_data_B = list()
 
     for idx_A, idx_B in zip(train_data_A_idx_subset, train_data_B_idx_subset):
+        # select data A
         data_A = dataset_A[idx_A]
+        # cut out part?
         frames_A_total = data_A.shape[1]
         assert frames_A_total >= n_frames
-        start_A = np.random.randint(frames_A_total - n_frames + 1)
-        end_A = start_A + n_frames
+        start_A = np.random.randint(frames_A_total - n_frames + 1)  # single int between 0 and (frames_A_total - n_frames + 1)
+        end_A = start_A + n_frames # == start_A + 128 (can be configured, but seems to be not used)
         train_data_A.append(data_A[:,start_A:end_A])
 
         data_B = dataset_B[idx_B]
