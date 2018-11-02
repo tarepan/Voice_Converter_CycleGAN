@@ -67,6 +67,8 @@ def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validati
     # I suspect, np.ndarray(24(MCEPs), T/frame_period) ->
     coded_sps_A_norm, coded_sps_A_mean, coded_sps_A_std = coded_sps_normalization_fit_transoform(coded_sps = coded_sps_A_transposed)
     print("Input data fixed.")
+    print("normalized MCEPseqs")
+    print(coded_sps_A_norm)
     coded_sps_B_norm, coded_sps_B_mean, coded_sps_B_std = coded_sps_normalization_fit_transoform(coded_sps = coded_sps_B_transposed)
 
     if not os.path.exists(model_dir):
@@ -98,7 +100,7 @@ def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validati
         '''
         if epoch > 60:
             lambda_identity = 0
-        if epoch > 1250:
+        if epoch > 1250: (Given 162 sample per directory and batch size == 1, 1250 epoch equial to 202500 iteration. It is almost equal to original articles)
             generator_learning_rate = max(0, generator_learning_rate - 0.0000002)
             discriminator_learning_rate = max(0, discriminator_learning_rate - 0.0000001)
         '''
@@ -110,12 +112,12 @@ def train(train_A_dir, train_B_dir, model_dir, model_name, random_seed, validati
         n_samples = dataset_A.shape[0]
 
         for i in range(n_samples // mini_batch_size):
-
+            ###### iteration
             num_iterations = n_samples // mini_batch_size * epoch + i
 
             if num_iterations > 10000:
                 lambda_identity = 0
-            if num_iterations > 200000:
+            if num_iterations > 200000: # 162 sample / training_dir. minibatch==1 => 162 iterations/epoch => 202500 iterations/1250epoch
                 generator_learning_rate = max(0, generator_learning_rate - generator_learning_rate_decay)
                 discriminator_learning_rate = max(0, discriminator_learning_rate - discriminator_learning_rate_decay)
 

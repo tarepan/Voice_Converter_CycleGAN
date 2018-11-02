@@ -4,3 +4,5 @@ results
 my_test
 venv
 log
+
+__pycache__

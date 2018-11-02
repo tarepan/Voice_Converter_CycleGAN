@@ -1,4 +1,4 @@
-import tensorflow as tf 
+import tensorflow as tf
 
 def gated_linear_layer(inputs, gates, name = None):
 
@@ -7,9 +7,9 @@ def gated_linear_layer(inputs, gates, name = None):
     return activation
 
 def instance_norm_layer(
-    inputs, 
-    epsilon = 1e-06, 
-    activation_fn = None, 
+    inputs,
+    epsilon = 1e-06,
+    activation_fn = None,
     name = None):
 
     instance_norm_layer = tf.contrib.layers.instance_norm(
@@ -20,11 +20,11 @@ def instance_norm_layer(
     return instance_norm_layer
 
 def conv1d_layer(
-    inputs, 
-    filters, 
-    kernel_size, 
-    strides = 1, 
-    padding = 'same', 
+    inputs,
+    filters,
+    kernel_size,
+    strides = 1,
+    padding = 'same',
     activation = None,
     kernel_initializer = None,
     name = None):
@@ -42,11 +42,11 @@ def conv1d_layer(
     return conv_layer
 
 def conv2d_layer(
-    inputs, 
-    filters, 
-    kernel_size, 
-    strides, 
-    padding = 'same', 
+    inputs,
+    filters,
+    kernel_size,
+    strides,
+    padding = 'same',
     activation = None,
     kernel_initializer = None,
     name = None):
@@ -64,9 +64,9 @@ def conv2d_layer(
     return conv_layer
 
 def residual1d_block(
-    inputs, 
-    filters = 1024, 
-    kernel_size = 3, 
+    inputs,
+    filters = 1024,
+    kernel_size = 3,
     strides = 1,
     name_prefix = 'residule_block_'):
 
@@ -77,15 +77,15 @@ def residual1d_block(
     h1_glu = gated_linear_layer(inputs = h1_norm, gates = h1_norm_gates, name = name_prefix + 'h1_glu')
     h2 = conv1d_layer(inputs = h1_glu, filters = filters // 2, kernel_size = kernel_size, strides = strides, activation = None, name = name_prefix + 'h2_conv')
     h2_norm = instance_norm_layer(inputs = h2, activation_fn = None, name = name_prefix + 'h2_norm')
-    
+
     h3 = inputs + h2_norm
 
     return h3
 
 def downsample1d_block(
-    inputs, 
-    filters, 
-    kernel_size, 
+    inputs,
+    filters,
+    kernel_size,
     strides,
     name_prefix = 'downsample1d_block_'):
 
@@ -98,9 +98,9 @@ def downsample1d_block(
     return h1_glu
 
 def downsample2d_block(
-    inputs, 
-    filters, 
-    kernel_size, 
+    inputs,
+    filters,
+    kernel_size,
     strides,
     name_prefix = 'downsample2d_block_'):
 
@@ -113,13 +113,13 @@ def downsample2d_block(
     return h1_glu
 
 def upsample1d_block(
-    inputs, 
-    filters, 
-    kernel_size, 
+    inputs,
+    filters,
+    kernel_size,
     strides,
     shuffle_size = 2,
     name_prefix = 'upsample1d_block_'):
-    
+
     h1 = conv1d_layer(inputs = inputs, filters = filters, kernel_size = kernel_size, strides = strides, activation = None, name = name_prefix + 'h1_conv')
     h1_shuffle = pixel_shuffler(inputs = h1, shuffle_size = shuffle_size, name = name_prefix + 'h1_shuffle')
     h1_norm = instance_norm_layer(inputs = h1_shuffle, activation_fn = None, name = name_prefix + 'h1_norm')
@@ -183,7 +183,7 @@ def generator_gatedcnn(inputs, reuse = False, scope_name = 'generator_gatedcnn')
         o2 = tf.transpose(o1, perm = [0, 2, 1], name = 'output_transpose')
 
     return o2
-    
+
 
 def discriminator(inputs, reuse = False, scope_name = 'discriminator'):
 
@@ -211,4 +211,3 @@ def discriminator(inputs, reuse = False, scope_name = 'discriminator'):
         o1 = tf.layers.dense(inputs = d3, units = 1, activation = tf.nn.sigmoid)
 
         return o1
-
